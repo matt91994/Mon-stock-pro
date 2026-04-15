@@ -5,7 +5,6 @@ import smtplib
 from email.message import EmailMessage
 
 # --- RÉCUPÉRATION DES SECRETS ---
-# Sur Streamlit Cloud, cela récupère les infos dans "Advanced Settings" > "Secrets"
 try:
     MON_EMAIL = st.secrets["MON_EMAIL"]
     MON_CODE_SECRET = st.secrets["MON_CODE_SECRET"]
@@ -47,14 +46,14 @@ def envoyer_mail(destinataire, liste_manquants):
         return False
 
 # --- INTERFACE UTILISATEUR ---
-st.set_page_config(page_title="Mon Stock Cloud", page_icon="📦", layout="centered")
+st.set_page_config(page_title="Mon Stock Pro", page_icon="📦", layout="centered")
 
 st.title("📦 Gestion de Stock Professionnelle")
 
 # Charger les données
 stock = charger_stock()
 
-# --- BARRE LATÉRALE (AJOUT ET RÉGLAGES) ---
+# --- BARRE LATÉRALE ---
 with st.sidebar:
     st.header("⚙️ Contrôle")
     seuil_alerte = st.slider("Seuil d'alerte (Rouge)", 1, 15, 3)
@@ -82,28 +81,28 @@ manquants = []
 if not stock:
     st.info("Aucun article en stock. Utilisez le menu à gauche pour commencer.")
 else:
-    # Tableau propre
     c_head1, c_head2, c_head3 = st.columns([2, 2, 1])
-    c_head1.write("**Article**")
+    c_head1.write("**Article (Type)**")
     c_head2.write("**Quantité**")
     c_head3.write("**Suppr.**")
 
     for nom, info in sorted(stock.items()):
         c1, c2, c3 = st.columns([2, 2, 1])
         
-        # Gestion visuelle des alertes
+        unite_texte = info.get('unite', 'Unité(s)')
         alerte = info['qte'] < seuil_alerte
+        
         if alerte:
-            manquants.append(f"- {nom.capitalize()} : {info['qte']} {info['unite']}")
+            manquants.append(f"- {nom.capitalize()} : {info['qte']} {unite_texte}")
             nom_affiche = f"🔴 {nom.capitalize()}"
         else:
             nom_affiche = f"🟢 {nom.capitalize()}"
 
         with c1:
             st.markdown(f"**{nom_affiche}**")
+            st.caption(f"({unite_texte})") # <--- L'unité s'affiche ici maintenant
         
         with c2:
-            # Modification rapide
             n_qte = st.number_input(
                 f"Qté de {nom}", 
                 min_value=0, 
@@ -139,4 +138,4 @@ if manquants:
             st.error("Veuillez saisir une adresse mail valide.")
 else:
     st.success("✅ Tout est en stock. Pas de commande nécessaire.")
-  
+    
