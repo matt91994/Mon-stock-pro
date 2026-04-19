@@ -100,7 +100,7 @@ else:
 
         with c1:
             st.markdown(f"**{nom_affiche}**")
-            st.caption(f"({unite_texte})") # <--- L'unité s'affiche ici maintenant
+            st.caption(f"({unite_texte})")
         
         with c2:
             n_qte = st.number_input(
@@ -127,10 +127,12 @@ st.subheader("📧 Envoyer une demande de commande")
 
 if manquants:
     st.warning(f"Il y a {len(manquants)} article(s) sous le seuil d'alerte.")
-    mail_dest = st.text_input("Envoyer à l'adresse :", placeholder="exemple@gmail.com")
+    
+    # LIGNE MODIFIÉE : Ton email est pré-rempli ici
+    mail_dest = st.text_input("Envoyer à l'adresse :", value="matthieuwach@gmail.com")
     
     if st.button("🚀 Envoyer le mail maintenant"):
-        if mail_dest = st.text_input("Envoyer à l'adresse :", value="matthieuwach@gmail.com")
+        if mail_dest:
             with st.spinner("Envoi du mail en cours..."):
                 if envoyer_mail(mail_dest, manquants):
                     st.success(f"📧 Liste envoyée avec succès à {mail_dest} !")
