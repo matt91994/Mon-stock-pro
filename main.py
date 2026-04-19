@@ -130,7 +130,7 @@ if manquants:
     mail_dest = st.text_input("Envoyer à l'adresse :", placeholder="exemple@gmail.com")
     
     if st.button("🚀 Envoyer le mail maintenant"):
-        if mail_dest:
+        if mail_dest = st.text_input("Envoyer à l'adresse :", value="matthieuwach@gmail.com")
             with st.spinner("Envoi du mail en cours..."):
                 if envoyer_mail(mail_dest, manquants):
                     st.success(f"📧 Liste envoyée avec succès à {mail_dest} !")
