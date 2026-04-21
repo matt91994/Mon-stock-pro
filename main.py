@@ -7,29 +7,28 @@ import time
 # --- CONFIGURATION DE LA PAGE ---
 st.set_page_config(page_title="Mon Stock Pro", page_icon="📦", layout="centered")
 
-# --- RÉCUPÉRATION DES SECRETS (LE COFFRE-FORT) ---
+# --- RÉCUPÉRATION DES SECRETS ---
 try:
-    # On récupère les infos depuis les Secrets Streamlit (pas en clair ici !)
     MON_EMAIL = st.secrets["MON_EMAIL"]
     MON_CODE_SECRET = st.secrets["MON_CODE_SECRET"]
     URL_BRUTE = st.secrets["GSHEET_URL"]
     
-    # Transformation automatique du lien pour l'export CSV
+    # Transformation du lien pour l'export CSV
     if "/edit" in URL_BRUTE:
         CSV_URL = URL_BRUTE.split("/edit")[0] + "/export?format=csv"
     else:
         CSV_URL = URL_BRUTE
 except Exception as e:
-    st.error("⚠️ Erreur de configuration : Les noms dans vos 'Secrets' Streamlit ne correspondent pas.")
-    st.info("Vérifiez que vous avez bien : MON_EMAIL, MON_CODE_SECRET et GSHEET_URL (en MAJUSCULES).")
+    st.error("⚠️ Erreur : Les noms dans vos 'Secrets' Streamlit sont incorrects.")
+    st.info("Vérifiez que vous avez bien mis : MON_EMAIL, MON_CODE_SECRET et GSHEET_URL.")
     st.stop()
 
 # --- FONCTION D'ENVOI DE MAIL ---
 def envoyer_mail(destinataire, liste_manquants):
     msg = EmailMessage()
-    corps = "Bonjour,\n\nVoici les produits à commander en priorité :\n\n" + "\n".join(liste_manquants)
+    corps = "Bonjour,\n\nVoici les produits à commander :\n\n" + "\n".join(liste_manquants)
     msg.set_content(corps)
-    msg['Subject'] = "⚠️ COMMANDE STOCK : Liste à prévoir"
+    msg['Subject'] = "⚠️ COMMANDE STOCK"
     msg['From'] = MON_EMAIL
     msg['To'] = destinataire
 
@@ -43,47 +42,37 @@ def envoyer_mail(destinataire, liste_manquants):
         return False
 
 # --- CHARGEMENT DES DONNÉES ---
-@st.cache_data(ttl=10) # Rafraîchissement toutes les 10 secondes
+@st.cache_data(ttl=5)
 def charger_stock(url):
     try:
-        # On ajoute un timestamp pour éviter que Google ne serve une version périmée (cache)
-        return pd.read_csv(f"{url}&nocache={time.time()}")
+        # On ajoute un timestamp unique pour forcer la mise à jour
+        return pd.read_csv(f"{url}&t={int(time.time())}")
     except Exception as e:
         return None
 
-# --- INTERFACE PRINCIPALE ---
+# --- INTERFACE ---
 st.title("📦 Gestion de Stock")
 
-# Tentative de lecture de la Google Sheet
 df = charger_stock(CSV_URL)
 
 if df is None:
     st.error("❌ Impossible de lire la Google Sheet.")
-    st.markdown("""
-    **Vérifiez deux choses :**
-    1. Le bouton **Partager** dans Google Sheets est bien sur "Tous les utilisateurs disposant du lien".
-    2. Le lien dans vos Secrets est le bon.
-    """)
     st.stop()
 
-# --- AFFICHAGE DU STOCK ---
-st.subheader("📊 État des produits")
+# --- AFFICHAGE ---
+st.subheader("📊 État actuel")
 manquants = []
 
-# Barre latérale
 with st.sidebar:
     st.header("⚙️ Réglages")
     seuil_alerte = st.slider("Seuil d'alerte", 1, 15, 3)
-    st.divider()
-    if st.button("🔄 Forcer l'actualisation"):
+    if st.button("🔄 Actualiser"):
         st.cache_data.clear()
         st.rerun()
 
-# Vérification si le tableau est vide
 if df.empty:
-    st.warning("Votre Google Sheet semble vide ou les colonnes sont mal nommées (nom, quantite, unite).")
+    st.warning("Le tableau Google Sheet est vide.")
 else:
-    # On affiche chaque article
     for index, row in df.iterrows():
         try:
             nom = str(row['nom']).capitalize()
@@ -91,7 +80,6 @@ else:
             unite = str(row['unite'])
             
             col1, col2 = st.columns([3, 1])
-            
             alerte = qte < seuil_alerte
             icone = "🔴" if alerte else "🟢"
             
@@ -103,21 +91,20 @@ else:
                 st.caption(f"Unité : {unite}")
             with col2:
                 st.markdown(f"### {qte}")
-        except Exception:
-            continue # Saute la ligne si elle est mal remplie dans Google Sheets
+        except:
+            continue
 
 # --- SECTION MAIL ---
 st.divider()
-st.subheader("📧 Envoyer une commande")
-
 if manquants:
-    st.warning(f"Il y a {len(manquants)} article(s) sous le seuil.")
-    mail_dest = st.text_input("Envoyer à :", value=MON_EMAIL)
+    st.warning(f"Il y a {len(manquants)} article(s) en alerte.")
+    mail_dest = st.text_input("Envoyer la commande à :", value=MON_EMAIL)
     
-    if st.button("🚀 Envoyer la liste par mail"):
-        with st.spinner("Envoi en cours..."):
-            if envoyer_mail(mail_dest, manquants):
-                st.success("📧 Mail envoyé avec succès !")
+    if st.button("🚀 Envoyer le mail"):
+        if envoyer_mail(mail_dest, manquants):
+            st.success("📧 Envoyé avec succès !")
 else:
-    st.success("✅ Tout est en stock.
-               
+    st.success("✅ Stock OK.")
+
+st.sidebar.divider()
+st.sidebar.markdown(f"🔗 [Lien Google Sheet]({URL_BRUTE})")
