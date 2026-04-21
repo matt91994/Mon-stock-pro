@@ -9,8 +9,8 @@ st.set_page_config(page_title="Mon Stock Pro", page_icon="📦", layout="centere
 
 # --- RÉCUPÉRATION DES SECRETS ---
 try:
-    MON_EMAIL = st.secrets["MON_EMAIL"]
-    MON_CODE_SECRET = st.secrets["MON_CODE_SECRET"]
+    MON_EMAIL = st.secrets["matthieuwach@gmail.com"]
+    MON_CODE_SECRET = st.secrets["zgjrweclcmmezrho"]
     URL_BRUTE = st.secrets["GSHEET_URL"]
     
     # Transformation du lien pour forcer l'export en CSV
