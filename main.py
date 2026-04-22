@@ -69,15 +69,18 @@ with st.sidebar:
 if df.empty:
     st.warning("Le tableau Google Sheet est vide.")
 else:
+    # On crée un container pour que les lignes soient bien regroupées
+    container = st.container()
+    
     for index, row in df.iterrows():
         try:
             nom = str(row['nom']).capitalize()
             qte = int(row['quantite'])
             unite = str(row['unite'])
             
-            # On prépare le texte combiné (ex: "2 cartons")
             texte_quantite = f"{qte} {unite}"
             
+            # --- DÉBUT DE LA LIGNE PRODUIT ---
             col1, col2 = st.columns([2, 1])
             alerte = qte < seuil_alerte
             icone = "🔴" if alerte else "🟢"
@@ -86,16 +89,20 @@ else:
                 manquants.append(f"- {nom} : {texte_quantite}")
                 
             with col1:
-                st.markdown(f"{icone} **{nom}**")
-                # On a supprimé la ligne st.caption(unite) ici
+                # Texte un peu plus gros pour le nom
+                st.markdown(f"{icone} &nbsp; **{nom}**")
             with col2:
-                # On affiche la quantité et l'unité sur la même ligne, aligné à droite
+                # Alignement visuel de la quantité
                 st.markdown(f"**{texte_quantite}**")
+            
+            # AJOUT DU TRAIT DE SÉPARATION
+            st.divider() 
+            # --- FIN DE LA LIGNE PRODUIT ---
+            
         except:
             continue
 
 # --- SECTION MAIL ---
-st.divider()
 if manquants:
     st.warning(f"Il y a {len(manquants)} article(s) en alerte.")
     mail_dest = st.text_input("Envoyer la commande à :", value=MON_EMAIL)
