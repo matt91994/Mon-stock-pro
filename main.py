@@ -26,7 +26,7 @@ def get_csv_url(url):
 def load_data():
     csv_url = get_csv_url(st.secrets["sheet_url"])
     df = pd.read_csv(csv_url)
-    df.columns = [c.strip().lower().replace("é", "e").replace("è", "e").replace("ê", "e") for c in df.columns]
+    df.columns = [c.strip().lower() for c in df.columns]
     return df
 
 try:
