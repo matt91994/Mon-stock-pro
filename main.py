@@ -1,11 +1,14 @@
 import streamlit as st
 import pandas as pd
 import smtplib
+import unicodedata
 from email.mime.text import MIMEText
+
+def strip_accents(s):
+    return "".join(c for c in unicodedata.normalize("NFD", str(s)) if unicodedata.category(c) != "Mn")
 
 st.set_page_config(page_title="Gestion de Stock", page_icon="📦")
 
-# ── Sidebar Réglages ────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("⚙️ Réglages")
     seuil_global = st.slider("Seuil d'alerte global", 1, 20, 3)
@@ -17,16 +20,18 @@ with st.sidebar:
     if sheet_url:
         st.markdown(f"[🔗 Lien Google Sheet]({sheet_url})")
 
-# ── Chargement données via CSV public ──────────────────────────────────────
 def get_csv_url(url):
     sheet_id = url.split("/d/")[1].split("/")[0]
-    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/gviz/tq?tqx=out:csv&sheet=Stock_Data"
 
 @st.cache_data(ttl=60)
 def load_data():
     csv_url = get_csv_url(st.secrets["sheet_url"])
     df = pd.read_csv(csv_url)
-    df.columns = [c.strip().lower() for c in df.columns]
+    df.columns = [strip_accents(c).strip().lower() for c in df.columns]
+    df = df.dropna(how="all")
+    df = df[df["categorie"].notna() & df["produit"].notna()]
+    df = df[df["categorie"].str.strip() != ""]
     return df
 
 try:
@@ -52,19 +57,17 @@ else:
 
 df["alerte"] = df["quantite"] < df["seuil"]
 
-# ── Interface principale ────────────────────────────────────────────────────
 st.title("📦 Gestion de Stock")
 
+df["categorie"] = df["categorie"].str.strip().str.lower()
 categories = df["categorie"].unique()
 
 for cat in categories:
     df_cat = df[df["categorie"] == cat]
     nb_alertes_cat = df_cat["alerte"].sum()
-
     label = f"📁 {cat}"
     if nb_alertes_cat > 0:
         label += f"  🔴 {nb_alertes_cat} alerte(s)"
-
     with st.expander(label, expanded=True):
         for _, row in df_cat.iterrows():
             col1, col2 = st.columns([3, 1])
@@ -75,38 +78,31 @@ for cat in categories:
             with col2:
                 st.markdown(f"**{row['quantite']}** {cond}")
 
-# ── Récap alertes & envoi mail ──────────────────────────────────────────────
 alertes = df[df["alerte"]]
 
 if not alertes.empty:
     st.warning(f"⚠️ Il y a **{len(alertes)}** article(s) en alerte.")
-
     with st.expander("Voir les articles en alerte"):
         for _, row in alertes.iterrows():
             cond = row["conditionnement"] if "conditionnement" in df.columns else "unités"
             st.markdown(f"- **{row['categorie']}** › {row['produit']} : {row['quantite']} {cond} (seuil : {row['seuil']})")
-
     st.markdown("**Envoyer la commande à :**")
     email_dest = st.text_input("Email", value="matthieuwach@gmail.com", label_visibility="collapsed")
-
     if st.button("🚀 Envoyer le mail"):
         lignes = "\n".join(
             f"- [{row['categorie']}] {row['produit']} : {row['quantite']} {row.get('conditionnement', 'unités')} (seuil : {row['seuil']})"
             for _, row in alertes.iterrows()
         )
         corps = f"Bonjour,\n\nLes articles suivants sont sous le seuil d'alerte :\n\n{lignes}\n\nMerci de passer commande."
-
         try:
             smtp_cfg = st.secrets["smtp"]
             msg = MIMEText(corps)
             msg["Subject"] = "⚠️ Alerte Stock"
             msg["From"] = smtp_cfg["user"]
             msg["To"] = email_dest
-
             with smtplib.SMTP_SSL(smtp_cfg["host"], int(smtp_cfg.get("port", 465))) as server:
                 server.login(smtp_cfg["user"], smtp_cfg["password"])
                 server.sendmail(smtp_cfg["user"], email_dest, msg.as_string())
-
             st.success("✅ Mail envoyé avec succès !")
         except Exception as e:
             st.error(f"Erreur envoi mail : {e}")
