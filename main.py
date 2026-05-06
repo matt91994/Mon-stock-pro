@@ -9,6 +9,21 @@ def strip_accents(s):
 
 st.set_page_config(page_title="Gestion de Stock", page_icon="📦")
 
+# ── Mot de passe ────────────────────────────────────────────────────────────
+if "authentifie" not in st.session_state:
+    st.session_state.authentifie = False
+
+if not st.session_state.authentifie:
+    st.title("🔒 Accès sécurisé")
+    mdp = st.text_input("Mot de passe", type="password")
+    if st.button("Connexion"):
+        if mdp == st.secrets["mot_de_passe"]:
+            st.session_state.authentifie = True
+            st.rerun()
+        else:
+            st.error("❌ Mot de passe incorrect")
+    st.stop()
+
 with st.sidebar:
     st.header("⚙️ Réglages")
     seuil_global = st.slider("Seuil d'alerte global", 1, 20, 3)
