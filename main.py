@@ -1,22 +1,9 @@
 import streamlit as st
 import pandas as pd
-import gspread
-from google.oauth2.service_account import Credentials
 import smtplib
 from email.mime.text import MIMEText
 
 st.set_page_config(page_title="Gestion de Stock", page_icon="📦")
-
-# ── Connexion Google Sheet ──────────────────────────────────────────────────
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-
-@st.cache_resource
-def get_sheet():
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"], scopes=SCOPES
-    )
-    client = gspread.authorize(creds)
-    return client.open_by_url(st.secrets["sheet_url"]).sheet1
 
 # ── Sidebar Réglages ────────────────────────────────────────────────────────
 with st.sidebar:
@@ -26,36 +13,38 @@ with st.sidebar:
         st.cache_data.clear()
         st.rerun()
     st.markdown("---")
-    st.markdown("[🔗 Lien Google Sheet](%s)" % st.secrets.get("sheet_url", "#"))
+    sheet_url = st.secrets.get("sheet_url", "")
+    if sheet_url:
+        st.markdown(f"[🔗 Lien Google Sheet]({sheet_url})")
 
-# ── Chargement données ──────────────────────────────────────────────────────
+# ── Chargement données via CSV public ──────────────────────────────────────
+def get_csv_url(url):
+    sheet_id = url.split("/d/")[1].split("/")[0]
+    return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+
 @st.cache_data(ttl=60)
 def load_data():
-    sheet = get_sheet()
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
-    # Normalise les noms de colonnes
+    csv_url = get_csv_url(st.secrets["sheet_url"])
+    df = pd.read_csv(csv_url)
     df.columns = [c.strip().lower() for c in df.columns]
     return df
 
 try:
     df = load_data()
 except Exception as e:
-    st.error(f"Erreur de connexion au Google Sheet : {e}")
+    st.error(f"Erreur de chargement du Google Sheet : {e}")
     st.stop()
 
-# Colonnes attendues : categorie, produit, quantite, seuil (optionnel)
 required_cols = {"categorie", "produit", "quantite"}
 if not required_cols.issubset(set(df.columns)):
     st.error(
-        f"Colonnes manquantes dans le Sheet. Colonnes trouvées : {list(df.columns)}\n"
+        f"Colonnes manquantes. Colonnes trouvées : {list(df.columns)}\n"
         f"Colonnes requises : {list(required_cols)}"
     )
     st.stop()
 
 df["quantite"] = pd.to_numeric(df["quantite"], errors="coerce").fillna(0).astype(int)
 
-# Utilise seuil individuel si la colonne existe, sinon seuil global
 if "seuil" in df.columns:
     df["seuil"] = pd.to_numeric(df["seuil"], errors="coerce").fillna(seuil_global).astype(int)
 else:
@@ -74,7 +63,7 @@ for cat in categories:
 
     label = f"📁 {cat}"
     if nb_alertes_cat > 0:
-        label += f" 🔴 {nb_alertes_cat} alerte(s)"
+        label += f"  🔴 {nb_alertes_cat} alerte(s)"
 
     with st.expander(label, expanded=True):
         for _, row in df_cat.iterrows():
@@ -94,14 +83,15 @@ if not alertes.empty:
 
     with st.expander("Voir les articles en alerte"):
         for _, row in alertes.iterrows():
-            st.markdown(f"- **{row['categorie']}** › {row['produit']} : {row['quantite']} unités (seuil : {row['seuil']})")
+            cond = row["conditionnement"] if "conditionnement" in df.columns else "unités"
+            st.markdown(f"- **{row['categorie']}** › {row['produit']} : {row['quantite']} {cond} (seuil : {row['seuil']})")
 
     st.markdown("**Envoyer la commande à :**")
     email_dest = st.text_input("Email", value="matthieuwach@gmail.com", label_visibility="collapsed")
 
     if st.button("🚀 Envoyer le mail"):
         lignes = "\n".join(
-            f"- [{row['categorie']}] {row['produit']} : {row['quantite']} unités (seuil : {row['seuil']})"
+            f"- [{row['categorie']}] {row['produit']} : {row['quantite']} {row.get('conditionnement', 'unités')} (seuil : {row['seuil']})"
             for _, row in alertes.iterrows()
         )
         corps = f"Bonjour,\n\nLes articles suivants sont sous le seuil d'alerte :\n\n{lignes}\n\nMerci de passer commande."
@@ -113,7 +103,7 @@ if not alertes.empty:
             msg["From"] = smtp_cfg["user"]
             msg["To"] = email_dest
 
-            with smtplib.SMTP_SSL(smtp_cfg["host"], smtp_cfg.get("port", 465)) as server:
+            with smtplib.SMTP_SSL(smtp_cfg["host"], int(smtp_cfg.get("port", 465))) as server:
                 server.login(smtp_cfg["user"], smtp_cfg["password"])
                 server.sendmail(smtp_cfg["user"], email_dest, msg.as_string())
 
